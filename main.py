@@ -3,19 +3,16 @@ import requests
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-BOT_TOKEN = os.getenv("ASTRASCOUTCRYPTOBOT")
+BOT_TOKEN = os.getenv("ASTRASCOUT_BOT_TOKEN")
 CRYPTO_API_URL = os.getenv("CRYPTO_API_URL")
 INSIGHTS_API_URL = os.getenv("INSIGHTS_API_URL")
 
-# -------- Commands --------
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🚀 AstraScout Crypto Bot\n\n"
+        "Welcome to AstraScout Crypto Bot 🚀\n\n"
         "Commands:\n"
         "/price BTC\n"
-        "/feargreed\n"
-        "/market"
+        "/feargreed"
     )
 
 async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -26,34 +23,17 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbol = context.args[0].upper()
     url = f"{CRYPTO_API_URL}/price/{symbol}"
 
-    try:
-        r = requests.get(url, timeout=10)
-        data = r.json()
-        await update.message.reply_text(f"💰 {symbol} price:\n{data}")
-    except Exception as e:
-        await update.message.reply_text("Error fetching price")
+    r = requests.get(url, timeout=10)
+    data = r.json()
+
+    await update.message.reply_text(f"{symbol} price:\n{data}")
 
 async def feargreed(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = f"{INSIGHTS_API_URL}/feargreed"
+    r = requests.get(url, timeout=10)
+    data = r.json()
 
-    try:
-        r = requests.get(url, timeout=10)
-        data = r.json()
-        await update.message.reply_text(f"😱 Fear & Greed Index:\n{data}")
-    except:
-        await update.message.reply_text("Error fetching Fear & Greed data")
-
-async def market(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    url = f"{INSIGHTS_API_URL}/market/insights"
-
-    try:
-        r = requests.get(url, timeout=10)
-        data = r.json()
-        await update.message.reply_text(f"📊 Market Insights:\n{data}")
-    except:
-        await update.message.reply_text("Error fetching market insights")
-
-# -------- Run --------
+    await update.message.reply_text(f"Fear & Greed Index:\n{data}")
 
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -61,8 +41,8 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("price", price))
     app.add_handler(CommandHandler("feargreed", feargreed))
-    app.add_handler(CommandHandler("market", market))
 
+    print("AstraScout bot is running...")
     app.run_polling()
 
 if __name__ == "__main__":

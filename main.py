@@ -62,7 +62,7 @@ def main():
     app.add_handler(CommandHandler("feargreed", feargreed))
 
     print("✅ Bot gestart")
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()

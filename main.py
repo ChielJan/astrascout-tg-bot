@@ -1,114 +1,65 @@
 import os
-import logging
 import requests
 from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-)
-
-# --------------------------------------------------
-# Config & environment
-# --------------------------------------------------
-
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
-)
-logger = logging.getLogger(__name__)
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 BOT_TOKEN = os.getenv("ASTRASCOUT_BOT_TOKEN")
-CRYPTO_API_BASE = os.getenv("CRYPTO_API_URL", "").rstrip("/")
-INSIGHTS_API_BASE = os.getenv("INSIGHTS_API_URL", "").rstrip("/")
+CRYPTO_API_URL = os.getenv("CRYPTO_API_URL")
+INSIGHTS_API_URL = os.getenv("INSIGHTS_API_URL")
 
-if not BOT_TOKEN:
-    raise RuntimeError("Environment variable ASTRASCOUT_BOT_TOKEN ontbreekt")
-if not CRYPTO_API_BASE:
-    raise RuntimeError("Environment variable CRYPTO_API_URL ontbreekt")
-if not INSIGHTS_API_BASE:
-    raise RuntimeError("Environment variable INSIGHTS_API_URL ontbreekt")
+if not BOT_TOKEN or not CRYPTO_API_URL or not INSIGHTS_API_URL:
+    raise ValueError("Missing environment variables")
 
-
-# --------------------------------------------------
-# Command handlers
-# --------------------------------------------------
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """ /start command """
-    text = (
-        "🤖 AstraScout Crypto Bot\n\n"
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "AstraScout Crypto Bot is live.\n\n"
         "Commands:\n"
-        "/price BTC – huidige prijs\n"
-        "/feargreed – Fear & Greed index"
+        "/price BTC\n"
+        "/feargreed"
     )
-    await update.message.reply_text(text)
 
-
-async def price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """ /price <SYMBOL> """
+async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("Gebruik: /price BTC")
+        await update.message.reply_text("Usage: /price BTC")
         return
 
     symbol = context.args[0].upper()
-    url = f"{CRYPTO_API_BASE}/price/{symbol}"
+    url = f"{CRYPTO_API_URL}/{symbol}"
 
     try:
-        resp = requests.get(url, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        data = r.json()
 
         price = data.get("price")
         if price is None:
-            raise ValueError("Geen 'price' veld in response")
+            raise ValueError("No price in response")
 
-        await update.message.reply_text(f"💰 {symbol}: ${price}")
-    except Exception as e:
-        logger.exception("Fout bij ophalen prijs voor %s: %s", symbol, e)
-        await update.message.reply_text("❌ Kon prijs niet ophalen, probeer later opnieuw.")
+        await update.message.reply_text(f"{symbol}: ${price}")
+    except Exception:
+        await update.message.reply_text("Could not fetch price")
 
-
-async def feargreed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """ /feargreed """
-    url = f"{INSIGHTS_API_BASE}/feargreed"
-
+async def feargreed(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        resp = requests.get(url, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
+        r = requests.get(INSIGHTS_API_URL, timeout=10)
+        r.raise_for_status()
+        data = r.json()
 
         score = data.get("fear_greed_index")
-        label = data.get("label")
+        label = data.get("classification")
 
-        if score is None or label is None:
-            raise ValueError("Onverwacht response-formaat")
-
-        text = (
-            "📊 Fear & Greed Index\n"
-            f"Score: {score}\n"
-            f"Sentiment: {label}"
+        await update.message.reply_text(
+            f"Fear & Greed Index\nScore: {score}\nSentiment: {label}"
         )
-        await update.message.reply_text(text)
-    except Exception as e:
-        logger.exception("Fout bij ophalen Fear & Greed: %s", e)
-        await update.message.reply_text("❌ Kon Fear & Greed niet ophalen, probeer later opnieuw.")
+    except Exception:
+        await update.message.reply_text("Could not fetch Fear & Greed")
 
-
-# --------------------------------------------------
-# Main entrypoint
-# --------------------------------------------------
-
-def main() -> None:
+def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("price", price))
     app.add_handler(CommandHandler("feargreed", feargreed))
-
-    logger.info("✅ AstraScout Telegram bot gestart")
-    app.run_polling(drop_pending_updates=True)
-
+    app.run_polling()
 
 if __name__ == "__main__":
     main()

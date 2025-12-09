@@ -1,18 +1,18 @@
 import os
 import requests
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes
 
 BOT_TOKEN = os.getenv("ASTRASCOUT_BOT_TOKEN")
 CRYPTO_API_URL = os.getenv("CRYPTO_API_URL")
 INSIGHTS_API_URL = os.getenv("INSIGHTS_API_URL")
 
-if not BOT_TOKEN or not CRYPTO_API_URL or not INSIGHTS_API_URL:
-    raise ValueError("Missing environment variables")
+if not BOT_TOKEN:
+    raise RuntimeError("ASTRASCOUT_BOT_TOKEN ontbreekt")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "AstraScout Crypto Bot is live.\n\n"
+        "🤖 AstraScout Crypto Bot\n\n"
         "Commands:\n"
         "/price BTC\n"
         "/feargreed"
@@ -20,7 +20,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("Usage: /price BTC")
+        await update.message.reply_text("Gebruik: /price BTC")
         return
 
     symbol = context.args[0].upper()
@@ -33,11 +33,11 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         price = data.get("price")
         if price is None:
-            raise ValueError("No price in response")
+            raise ValueError("Geen price veld")
 
-        await update.message.reply_text(f"{symbol}: ${price}")
+        await update.message.reply_text(f"💰 {symbol}: ${price}")
     except Exception:
-        await update.message.reply_text("Could not fetch price")
+        await update.message.reply_text("❌ Kon prijs niet ophalen")
 
 async def feargreed(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -46,19 +46,24 @@ async def feargreed(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = r.json()
 
         score = data.get("fear_greed_index")
-        label = data.get("classification")
+        label = data.get("label")
 
         await update.message.reply_text(
-            f"Fear & Greed Index\nScore: {score}\nSentiment: {label}"
+            f"📊 Fear & Greed Index\n"
+            f"Score: {score}\n"
+            f"Sentiment: {label}"
         )
     except Exception:
-        await update.message.reply_text("Could not fetch Fear & Greed")
+        await update.message.reply_text("❌ Kon Fear & Greed index niet ophalen")
 
 def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app = Application.builder().token(BOT_TOKEN).build()
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("price", price))
     app.add_handler(CommandHandler("feargreed", feargreed))
+
+    print("✅ AstraScout bot draait")
     app.run_polling()
 
 if __name__ == "__main__":

@@ -1,34 +1,36 @@
 import os
 import requests
 
-from telegram import Update, ParseMode
+from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import (
-    Updater,
+    ApplicationBuilder,
     CommandHandler,
-    CallbackContext,
+    ContextTypes,
 )
 
-# ---------- ENV VARS ----------
-
+# --------------------
+# Environment variables
+# --------------------
 BOT_TOKEN = os.getenv("ASTRASCOUT_BOT_TOKEN")
 RAPID_API_KEY = os.getenv("RAPID_API_KEY")
 
-CRYPTO_API_URL = os.getenv("CRYPTO_API_URL") # bv: https://astrascout-crypto-api.p.rapidapi.com/price
-CRYPTO_API_HOST = os.getenv("CRYPTO_API_HOST") # bv: astrascout-crypto-api.p.rapidapi.com
+CRYPTO_API_URL = os.getenv("CRYPTO_API_URL")
+CRYPTO_API_HOST = os.getenv("CRYPTO_API_HOST")
 
-INSIGHTS_API_URL = os.getenv("INSIGHTS_API_URL") # bv: https://astrascout-market-insights-api.p.rapidapi.com/feargreed
-INSIGHTS_API_HOST = os.getenv("INSIGHTS_API_HOST") # bv: astrascout-market-insights-api.p.rapidapi.com
+INSIGHTS_API_URL = os.getenv("INSIGHTS_API_URL")
+INSIGHTS_API_HOST = os.getenv("INSIGHTS_API_HOST")
 
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID") # kanaal / chat id voor de 5-min updates
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-
-# ---------- CHECKS ----------
-
+# --------------------
+# Safety checks
+# --------------------
 if not BOT_TOKEN:
-    raise ValueError("ASTRASCOUT_BOT_TOKEN ontbreekt")
+    raise ValueError("ASTRASCOUT_BOT_TOKEN ontbreekt in Railway variables")
 
 if not RAPID_API_KEY:
-    raise ValueError("RAPID_API_KEY ontbreekt")
+    raise ValueError("RAPID_API_KEY ontbreekt in Railway variables")
 
 if not CRYPTO_API_URL or not CRYPTO_API_HOST:
     raise ValueError("CRYPTO_API_URL of CRYPTO_API_HOST ontbreekt")
@@ -37,101 +39,102 @@ if not INSIGHTS_API_URL or not INSIGHTS_API_HOST:
     raise ValueError("INSIGHTS_API_URL of INSIGHTS_API_HOST ontbreekt")
 
 
-# ---------- HULPFUNCTIES ----------
-
 def rapid_headers(host: str) -> dict:
+    """Headers voor RapidAPI calls."""
     return {
         "X-RapidAPI-Key": RAPID_API_KEY,
         "X-RapidAPI-Host": host,
     }
 
 
-# ---------- COMMANDS ----------
-
-def start(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text(
+# --------------------
+# Commands
+# --------------------
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
         "🤖 AstraScout Crypto Bot\n\n"
-        "Commands:\n"
+        "Beschikbare commands:\n"
         "/price BTC – huidige prijs\n"
         "/feargreed – Fear & Greed index"
     )
 
 
-def price(update: Update, context: CallbackContext) -> None:
+async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        update.message.reply_text("Gebruik: /price BTC")
+        await update.message.reply_text("Gebruik: /price BTC")
         return
 
     symbol = context.args[0].upper()
 
     try:
-        resp = requests.get(
-            f"{CRYPTO_API_URL.rstrip('/')}/{symbol}",
+        r = requests.get(
+            f"{CRYPTO_API_URL}/{symbol}",
             headers=rapid_headers(CRYPTO_API_HOST),
             timeout=10,
         )
-        resp.raise_for_status()
-        data = resp.json()
+        r.raise_for_status()
+        data = r.json()
 
+        # Jouw API geeft 'price_usd' terug
         price_usd = data.get("price_usd")
-        if price_usd is None:
-            raise ValueError(f"Geen 'price_usd' in response: {data}")
-
         source = data.get("source", "unknown")
 
-        update.message.reply_text(
+        if price_usd is None:
+            raise Exception(f"Geen 'price_usd' veld in response: {data}")
+
+        await update.message.reply_text(
             f"💰 {symbol}: ${price_usd}\nBron: {source}"
         )
 
     except Exception as e:
-        update.message.reply_text(
-            f"❌ Kon prijs niet ophalen, probeer later opnieuw.\n(debug: {e})"
+        await update.message.reply_text(
+            f"❌ Kon prijs niet ophalen, probeer later opnieuw.\n"
+            f"(debug: {e})"
         )
 
 
-def feargreed(update: Update, context: CallbackContext) -> None:
+async def feargreed(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        resp = requests.get(
+        r = requests.get(
             INSIGHTS_API_URL,
             headers=rapid_headers(INSIGHTS_API_HOST),
             timeout=10,
         )
-        resp.raise_for_status()
-        data = resp.json()
+        r.raise_for_status()
+        data = r.json()
 
         score = data.get("fear_greed_index")
         label = data.get("classification")
 
-        update.message.reply_text(
+        await update.message.reply_text(
             "📊 Fear & Greed Index\n"
             f"Score: {score}\n"
             f"Sentiment: {label}"
         )
 
     except Exception as e:
-        update.message.reply_text(
-            f"❌ Kon Fear & Greed niet ophalen.\n(debug: {e})"
+        await update.message.reply_text(
+            f"❌ Kon Fear & Greed niet ophalen, probeer later opnieuw.\n"
+            f"(debug: {e})"
         )
 
 
-# ---------- JOB QUEUE: 5-MIN UPDATE ----------
-
-def scheduled_update(context: CallbackContext) -> None:
-    """Stuur elke 5 minuten een update naar TELEGRAM_CHAT_ID (kanaal of chat)."""
-    if not TELEGRAM_CHAT_ID:
-        # geen kanaal ingesteld, dan doen we niets
-        return
-
+# --------------------
+# Scheduler voor kanaal updates
+# --------------------
+async def scheduled_update(context: ContextTypes.DEFAULT_TYPE):
+    """Stuur elke X minuten een update naar je kanaal."""
     try:
         # BTC prijs via Rapid
         price_resp = requests.get(
-            f"{CRYPTO_API_URL.rstrip('/')}/BTC",
+            f"{CRYPTO_API_URL}/BTC",
             headers=rapid_headers(CRYPTO_API_HOST),
             timeout=10,
         )
         price_resp.raise_for_status()
         price_data = price_resp.json()
         btc_price = price_data.get("price_usd")
+        price_source = price_data.get("source", "unknown")
 
         # Fear & Greed via Rapid
         fg_resp = requests.get(
@@ -144,42 +147,47 @@ def scheduled_update(context: CallbackContext) -> None:
         fg_score = fg_data.get("fear_greed_index")
         fg_label = fg_data.get("classification")
 
-        text = (
+        message = (
             "📊 *AstraScout Market Update*\n\n"
-            f"💰 BTC Price: ${btc_price}\n"
+            f"💰 BTC Price: ${btc_price} (bron: {price_source})\n"
             f"😨 Fear & Greed: {fg_score} ({fg_label})\n\n"
             "Powered by AstraScout APIs"
         )
 
-        context.bot.send_message(
-            chat_id=TELEGRAM_CHAT_ID,
-            text=text,
-            parse_mode=ParseMode.MARKDOWN,
-        )
+        if TELEGRAM_CHAT_ID:
+            await context.bot.send_message(
+                chat_id=TELEGRAM_CHAT_ID,
+                text=message,
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        else:
+            print("TELEGRAM_CHAT_ID niet gezet – sla scheduled update over.")
 
     except Exception as e:
         print("Scheduled job error:", e)
 
 
-# ---------- MAIN ----------
+# --------------------
+# Main
+# --------------------
+def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-def main() -> None:
-    updater = Updater(BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+    # Command handlers
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("price", price))
+    app.add_handler(CommandHandler("feargreed", feargreed))
 
-    # Commands
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("price", price))
-    dp.add_handler(CommandHandler("feargreed", feargreed))
+    # Job queue voor elke 5 minuten update
+    job_queue = app.job_queue
+    job_queue.run_repeating(
+        scheduled_update,
+        interval=300, # 5 minuten
+        first=10, # eerste run na 10 seconden
+    )
 
-    # Elke 5 minuten automatische update (alleen als TELEGRAM_CHAT_ID gezet is)
-    if TELEGRAM_CHAT_ID:
-        jq = updater.job_queue
-        jq.run_repeating(scheduled_update, interval=300, first=10)
-
-    # Bot starten
-    updater.start_polling()
-    updater.idle()
+    print("✅ AstraScout bot gestart")
+    app.run_polling()
 
 
 if __name__ == "__main__":

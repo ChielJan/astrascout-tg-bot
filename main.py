@@ -79,8 +79,45 @@ async def feargreed(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ Kon Fear & Greed niet ophalen\n(debug: {e})")
 
+from telegram.constants import ParseMode
+
+async def scheduled_update(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        # Price
+        price_resp = requests.get(f"{CRYPTO_API_URL}/BTC", timeout=10).json()
+        btc_price = price_resp.get("price")
+
+        # Fear & Greed
+        fg_resp = requests.get(INSIGHTS_API_URL, timeout=10).json()
+        fg_score = fg_resp.get("fear_greed_index")
+        fg_label = fg_resp.get("classification")
+
+        message = (
+            "📊 *AstraScout Market Update*\n\n"
+            f"💰 BTC Price: ${btc_price}\n"
+            f"😨 Fear & Greed: {fg_score} ({fg_label})\n\n"
+            "Powered by AstraScout APIs"
+        )
+
+        await context.bot.send_message(
+            chat_id=os.getenv("TELEGRAM_CHAT_ID"),
+            text=message,
+            parse_mode=ParseMode.MARKDOWN
+        )
+
+    except Exception as e:
+        print("Scheduled job error:", e)
+
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    job_queue = app.job_queue
+
+job_queue.run_repeating(
+    scheduled_update,
+    interval=300, # 5 minuten
+    first=10 # start na 10 seconden
+)
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("price", price))

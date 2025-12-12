@@ -1,147 +1,145 @@
 AstraScout Telegram Bot
 
-A simple Telegram bot that delivers real-time crypto prices (26 supported assets) and market sentiment (Fear & Greed Index) — powered by the AstraScout APIs.
+Simple async Telegram bot that fetches:
 
-Perfect for traders, analysts, bots, dashboards or anyone who wants fast market data directly inside Telegram.
+- Live crypto prices (26 supported coins)  
+- The Bitcoin Fear & Greed Index  
+
+using the public **AstraScout** APIs on RapidAPI.
+
+---
+
+## Features
+
+- `/start` – Show bot info and available commands
+- `/price <symbol>` – Get the current USD price for a coin  
+  - Example: `/price BTC`, `/price ETH`, `/price SOL`
+- `/feargreed` – Get the latest Fear & Greed score and sentiment
+
+Under the hood the bot calls:
+
+- **Crypto Price API** – `CRYPTO_API_URL` / `CRYPTO_API_HOST`
+- **Market Insights API** – `INSIGHTS_API_URL` / `INSIGHTS_API_HOST`
+
+---
+
+## Requirements
+
+- Python 3.10+
+- `python-telegram-bot` (async, v20+)
+- `requests`
+
+Install dependencies (example):
+
+```bash
+pip install -r requirements.txt
 
 
 ---
 
-🚀 Features
+Environment Variables
 
-📈 Crypto Price API
+The bot is configured entirely via environment variables:
 
-Fetch live prices for 26 cryptocurrencies, including:
+ASTRASCOUT_BOT_TOKEN # Telegram bot token from @BotFather
+RAPID_API_KEY # Your RapidAPI key
 
-BTC, ETH, SOL, XRP
+TELEGRAM_CHAT_ID # Chat or channel ID where the bot may post
 
-AVAX, ADA, DOGE, SHIB
+CRYPTO_API_URL # e.g. https://astrascout-crypto-api.p.rapidapi.com/price
+CRYPTO_API_HOST # e.g. astrascout-crypto-api.p.rapidapi.com
 
-And many others
+INSIGHTS_API_URL # e.g. https://astrascout-market-insights-api.p.rapidapi.com/feargreed
+INSIGHTS_API_HOST # e.g. astrascout-market-insights-api.p.rapidapi.com
 
-
-Uses multi-source logic for better uptime and fewer null values.
-
-😨 Fear & Greed Index
-
-Returns:
-
-Current F&G score
-
-Classification (Fear, Neutral, Greed)
-
-Updated daily
-
-
-Great for simple sentiment bots and dashboards.
-
-
----
-
-🧰 Commands
-
-Command Description
-
-/price BTC Get the latest price for any supported asset
-/feargreed Returns the latest market sentiment
-
-
-
----
-
-🔌 APIs Used
-
-1️⃣ Crypto Price API
-
-RapidAPI:
-https://rapidapi.com/AstraScout/api/astrascout-crypto-api
-
-Endpoints used by the bot:
-
-GET /price/{symbol}
-
-26 supported assets
+> Note:
+TELEGRAM_CHAT_ID should be the ID of the chat or channel where the bot is allowed to send messages. For channels the bot must be added as an admin with permission to post messages.
 
 
 
 
 ---
 
-2️⃣ Market Insights (Fear & Greed) API
+How It Works
 
-RapidAPI:
-https://rapidapi.com/AstraScout/api/astrascout-market-insights-api
+/price <symbol>
 
-Endpoint used by the bot:
+When a user sends:
 
-GET /feargreed
+/price BTC
 
-
-
-
----
-
-🛠️ Tech Stack
-
-Python
-
-python-telegram-bot
-
-FastAPI (API backend)
-
-httpx (API calls)
-
-
-
----
-
-📦 Basic Example (How the bot fetches data)
-
-Crypto Price
-
-import requests
+the bot does:
 
 r = requests.get(
-    "https://astrascout-crypto-api.p.rapidapi.com/price/BTC",
-    headers={"X-RapidAPI-Key": "YOUR_KEY"}
-).json()
+    f"{CRYPTO_API_URL}/BTC",
+    headers={
+        "X-RapidAPI-Key": RAPID_API_KEY,
+        "X-RapidAPI-Host": CRYPTO_API_HOST,
+    },
+    timeout=10,
+)
+data = r.json()
+# -> expects fields like: {"price_usd": 43000, "source": "binance"}
 
-print(r)
+and replies with:
 
-Fear & Greed Index
+💰 BTC: $43000
+Bron: binance
 
-import requests
+Any supported symbol (26 coins) can be requested in the same way.
+
+/feargreed
+
+For:
+
+/feargreed
+
+the bot calls the Market Insights API:
 
 r = requests.get(
-    "https://astrascout-market-insights-api.p.rapidapi.com/feargreed",
-    headers={"X-RapidAPI-Key": "YOUR_KEY"}
-).json()
+    INSIGHTS_API_URL,
+    headers={
+        "X-RapidAPI-Key": RAPID_API_KEY,
+        "X-RapidAPI-Host": INSIGHTS_API_HOST,
+    },
+    timeout=10,
+)
+data = r.json()
+# -> expects fields like: {"fear_greed_index": 63, "classification": "Greed"}
 
-print(r)
+and replies with:
 
-
----
-
-⚙️ Environment Variables Required
-
-Create a .env file with:
-
-ASTRASCOUT_BOT_TOKEN=your_bot_token
-CRYPTO_API_URL=https://astrascout-crypto-api.p.rapidapi.com
-INSIGHTS_API_URL=https://astrascout-market-insights-api.p.rapidapi.com
-RAPID_API_KEY=your_rapidapi_key
-TELEGRAM_CHAT_ID=your_channel_or_chat_id
+📊 Fear & Greed Index
+Score: 63
+Sentiment: Greed
 
 
 ---
 
-🤝 Credits
+Running the Bot
 
-Built by AstraScout, combining Web3 curiosity with simple, developer-friendly tools.
+export ASTRASCOUT_BOT_TOKEN="YOUR_BOT_TOKEN"
+export RAPID_API_KEY="YOUR_RAPID_KEY"
+export TELEGRAM_CHAT_ID="YOUR_CHAT_OR_CHANNEL_ID"
+export CRYPTO_API_URL="https://astrascout-crypto-api.p.rapidapi.com/price"
+export CRYPTO_API_HOST="astrascout-crypto-api.p.rapidapi.com"
+export INSIGHTS_API_URL="https://astrascout-market-insights-api.p.rapidapi.com/feargreed"
+export INSIGHTS_API_HOST="astrascout-market-insights-api.p.rapidapi.com"
+
+python main.py
+
+You should see:
+
+✅ Bot gestart met JobQueue
+
+and the bot will start responding to /start, /price and /feargreed in Telegram.
 
 
 ---
 
-📜 License
+Notes
 
-MIT License.
+Errors from the APIs are caught and shown as a simple error message to the user,
+while the full exception is printed to the logs (e.g. on Railway).
+
+The bot is intentionally lightweight and focused on just prices and sentiment, powered entirely by the two AstraScout APIs.

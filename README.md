@@ -1,4 +1,4 @@
-AstraScout Telegram Bot
+## AstraScout Telegram Bot
 
 Simple async Telegram bot that fetches:
 
